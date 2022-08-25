@@ -16,10 +16,6 @@
       }
   ],
 
-  "background": {
-    "service_worker": "js/background.js"
-  },
-
   "permissions": [
     "storage",
     "clipboardRead"
