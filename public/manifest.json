@@ -1,17 +1,12 @@
 {
   "manifest_version": 3,
 
-  "name": "Chrome Extension TypeScript Starter",
-  "description": "Chrome Extension, TypeScript, Visual Studio Code",
+  "name": "Twitch Plays Polygonle",
+  "description": "Manages twitch commands and plays twitch plays polygonle",
   "version": "1.0",
 
-  "options_ui": {
-    "page": "options.html"
-  },
-
   "action": {
-    "default_icon": "icon.png",
-    "default_popup": "popup.html"
+    "default_icon": "icon.png"
   },
 
   "content_scripts": [
@@ -26,10 +21,12 @@
   },
 
   "permissions": [
-    "storage"
+    "storage",
+    "clipboardRead"
   ],
 
   "host_permissions": [
-    "<all_urls>"
+    "http://localhost/*",
+    "https://www.polygonle.com/*"
   ]
 }
