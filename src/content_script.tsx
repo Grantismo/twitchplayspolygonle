@@ -75,8 +75,22 @@ class Twitter extends Command {
 
 class HowToPlay extends Command {
   async run({userState, args}: RunArgs) {
-    // TODO complete tutorial
     await this.say('Guess the word in 6 tries. Each shape corresponds to a specific letter in the hidden word. Make a guess with !guess yourguesshere.')
+  }
+}
+
+class WordList extends Command {
+  async run({userState, args}: RunArgs) {
+    await this.say('Polygonle uses the SOWPODS word list: https://www.wordgamedictionary.com/sowpods/')
+  }
+}
+
+class ExplainSettings extends Command {
+  async run({userState, args}: RunArgs) {
+    await this.say('hard mode: Any revealed hints must be used in subsequent guesses.')
+    await this.say('expert mode: All guesses must match the pattern of the shapes. WARNING: this may be incredibly difficult for some puzzles.')
+    await this.say('dark mode: Dark background and light text.')
+    await this.say('highcontrast mode: For improved color vision.')
   }
 }
 
@@ -127,7 +141,7 @@ const SUPPORTED_TOGGLE_SETTINGS = ['hard', 'expert', 'dark', 'highcontrast']
 class Toggle extends Command {
   async run({userState, args}: RunArgs) {
     if(args.length === 0 || args.length > 1) {
-      return await this.say(`${userState.username} Usage: !toggle settingname`);
+      return await this.say(`${userState.username} Usage: !toggle settingname. Supported settings: ${SUPPORTED_TOGGLE_SETTINGS.join(', ')}`);
     }
     if(!(SUPPORTED_TOGGLE_SETTINGS.includes(args[0]))) {
       return await this.say(`${userState.username} Unknown setting. Supported settings: ${SUPPORTED_TOGGLE_SETTINGS.join(', ')}`);
@@ -156,21 +170,13 @@ class ListCommands extends Command {
 
 // TODO LIST
 //
-//  commands:
-//  finish guess
-//  !wordlist
-//  !explainsettings
-//
-//  !toggle setting 
-//  !music
-//
-//  features:
-//  show solution after a period of inactivity and refresh
-//  write name next to who guessed/what
-//  scoreboard
-//  avatars
-//  chat rules
-//  test race conditions (what happens if two people guess right near each other... ignore other guesses?
+// features:
+// show solution after a period of inactivity and refresh
+// write name next to who guessed/what
+// chat rules
+// !music
+// scoreboard
+// avatars
 
 async function main() {
   const client = new tmi.Client({
@@ -190,6 +196,8 @@ async function main() {
     new Discord({client, game, name: 'discord', isInteractive: false}),
     new Twitter({client, game, name: 'twitter', isInteractive: false}),
     new HowToPlay({client, game, name: 'howtoplay', isInteractive: false}),
+    new WordList({client, game, name: 'wordlist', isInteractive: false}),
+    new ExplainSettings({client, game, name: 'explainsettings', isInteractive: false}),
     new Settings({client, game, name: 'settings', isInteractive: false}),
     new Refresh({client, game, name: 'refresh', isInteractive: true, alias: 'r'}),
     new Guess({client, game, name: 'guess', isInteractive: true, alias: 'g'}),
