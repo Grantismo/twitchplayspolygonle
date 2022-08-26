@@ -37,4 +37,7 @@ module.exports = {
             options: {},
         }),
     ],
+    experiments: {
+        topLevelAwait: true
+    }
 };

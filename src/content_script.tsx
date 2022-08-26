@@ -1,8 +1,13 @@
+import {config} from './config'
+import tmi from 'tmi.js'
+
 const ANIMATION_WAIT = 100;
 const WAIT_TIMEOUT = 10000;
 
 const ALERT_WAIT_TIMEOUT = 350*8 /* max reveal delay */ + 500;
 const ALERT_POLL_DELAY = 25;
+const JOB_POLL_DELAY = 1000;
+
 const wait = async (millis: number) => {
   return new Promise<void>((resolve, reject) => {
         setTimeout(() => resolve(), millis);
@@ -138,22 +143,106 @@ class Game {
     }
     return false
   }
+}
 
-  // next puzzle
-  // share
+//window.addEventListener('load', async () => {
+//  const g = new Game();
+//  console.log(await g.getShareMessage());
+//  console.log('next...');
+//  console.log(await g.nextPuzzle());
+//  //let msg
+//  //msg = await g.guess('hello')
+//  //console.log(JSON.stringify(msg))
+//  //msg = await g.guess('sunshine')
+//  //console.log(JSON.stringify(msg))
+//  //msg = await g.guess('sunshine')
+//  //console.log(JSON.stringify(msg))
+//})
+type RunArgs = {
+  client: tmi.Client
+  args: string[]
+  userState: tmi.Userstate
+  game?: Game
+}
+
+type Job = {
+  command: Command
+  userState: tmi.Userstate
+  args: string[]
+}
+
+abstract class Command {
+  constructor(readonly name: string, readonly isInteractive: boolean) {}
+  abstract run(args: RunArgs): void 
+}
+
+class Hello extends Command {
+  async run({client, game, userState, args}: RunArgs) {
+    await client.say(config.TWITCH_CHANNEL, `hey ${userState.username}!`)
+  }
 }
 
 
-window.addEventListener('load', async () => {
-  const g = new Game();
-  console.log(await g.getShareMessage());
-  console.log('next...');
-  console.log(await g.nextPuzzle());
-  //let msg
-  //msg = await g.guess('hello')
-  //console.log(JSON.stringify(msg))
-  //msg = await g.guess('sunshine')
-  //console.log(JSON.stringify(msg))
-  //msg = await g.guess('sunshine')
-  //console.log(JSON.stringify(msg))
-})
+
+const toBang = (name: string) => `!${name}`;
+//new Set(['!hello', '!help', '!commands', '!guess', '!discord', '!twitter']);
+const commands = [new Hello('hello', false)]
+const allValidCommands = new Set(commands.map((c: Command) => toBang(c.name)));
+const nameToCommands = new Map(commands.map((c: Command) => [toBang(c.name), c]));
+
+const client = new tmi.Client({
+	options: { debug: true },
+	identity: {
+		username: config.TWITCH_USERNAME,
+		password: config.TWITCH_OAUTH
+	},
+	channels: [ config.TWITCH_CHANNEL ]
+});
+
+client.connect();
+
+
+const jobs: Job[] = [];
+client.on('message', (channel: string, userState: tmi.Userstate, message: string, self: boolean) => {
+	// Ignore echoed messages.
+	if(self) return;
+
+	const commandParts = message.split(' ')
+	if(commandParts.length > 0 && commandParts[0].startsWith('!')) {
+    const command = nameToCommands.get(commandParts[0])
+    if(!command) {
+		  client.say(channel, 'Unknown command. Use !commands to list all available');
+      return;
+    }
+    const args = commandParts.slice(1)
+    const runArgs = {userState, args};
+    if(!(command!.isInteractive)) {
+      // commands which don't interact with the game state can be run immediately.
+      command!.run({...runArgs, client})
+    } else {
+      // commands which interact with the game need to be processed by processJobs below.
+      jobs.push({...runArgs, command: command!})
+    }
+  }
+});
+
+const game = new Game();
+const processJobs = async () => {
+  if(jobs.length === 0) {
+    console.log('no jobs found, polling for new commands')
+    return await wait(JOB_POLL_DELAY)
+  }
+  const next = jobs.shift()! //dequeue
+  return await next.command.run({client, game, userState: next.userState, args: next.args})
+}
+
+//setInterval()
+while(true) {
+  await processJobs()
+}
+
+
+// game loop waiting for new comments
+// !music command?
+// package everything in a private browser somehow that doesn't bother my normal usage of the pc
+
