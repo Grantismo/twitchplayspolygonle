@@ -18,6 +18,8 @@ export const GAME_SETTING_EXPERT = "expert";
 export const GAME_SETTING_HIGH_CONTRAST = "highcontrast";
 export const GAME_SETTING_GAME = "game";
 
+const GUESSER_CLASS = 'guesser';
+
 
 const HIGH_CONTRAST_KEY = 'highContrast'
 const HARD_MODE_KEY = 'gameMode' // don't modify even though this is confusing
@@ -82,15 +84,59 @@ const clickById = async (id: string) => {
     return true;
 }
 
+const decorateWithGuesser = (rowElement: Element, name: string) => {
+  const firstCell = rowElement?.children[0] as HTMLElement;
+  if(!firstCell) {
+    return;
+  }
+  firstCell.style.position = 'relative';
+  const firstChild = firstCell.children[0];
+  const nameDiv = document.createElement('div');
+  nameDiv.classList.add(GUESSER_CLASS);
+  nameDiv.classList.add('text-black')
+  nameDiv.classList.add('dark:text-white')
+  nameDiv.textContent = name;
+  nameDiv.style.position = 'absolute';
+  nameDiv.style.left = '-30rem';
+  nameDiv.style.width = '30rem';
+  nameDiv.style.paddingRight = '1rem';
+  nameDiv.style.textAlign = 'right';
+  nameDiv.style.color 
+  firstCell.insertBefore(nameDiv, firstChild);
+};
+
 export class Game {
+  guessers: string[] = []
   constructor() {}
 
-  async guess(word: string) {
+  async init() {
+
+    const target = document.querySelector('[aria-label="puzzle"]')!.parentNode!
+    const observer = new MutationObserver((mutationList, observer) => {
+      const isOwnMutation = mutationList.length > 0 &&
+        mutationList[0].addedNodes.length > 0 &&
+        (mutationList[0].addedNodes[0] as HTMLElement).classList.contains(GUESSER_CLASS); 
+      if(isOwnMutation) {
+        return
+      }
+      const rows = document.querySelectorAll('[aria-label*="row"]')
+      for(let i = 0; i < this.guessers.length; i++) {
+          decorateWithGuesser(rows[i], this.guessers[i]);
+      }
+    });
+    observer.observe(target, {attributes: true, childList: true, subtree: true})
+  }
+
+  async guess(word: string, guesser?: string) {
     if(word.length < this.wordLength()) {
       return {message: 'Not enough letters', type: ALERT_TYPE_GUESS, status: ALERT_STATUS_ERROR} 
     }
     if(word.length > this.wordLength()) {
       return {message: 'Too many letters', type: ALERT_TYPE_GUESS, status: ALERT_STATUS_ERROR} 
+    }
+    if(guesser) {
+      this.guessers.push(guesser)
+      //await this.decorateWithGuesser(guesser)
     }
     for(let i = 0; i < word.length; i++){
       await keypress({key: word[i]});
@@ -101,6 +147,7 @@ export class Game {
     if(msg) {
       // either game over OR we got an error based on this guess
       await this.clearGuess()
+      // TODO remove guesser
       return msg
     }
     return {message: 'Valid guess', type: ALERT_TYPE_GUESS, status: ALERT_STATUS_SUCCESS} 

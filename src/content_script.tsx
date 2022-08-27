@@ -85,6 +85,12 @@ class WordList extends Command {
   }
 }
 
+class Music extends Command {
+  async run({userState, args}: RunArgs) {
+    await this.say('https://www.youtube.com/user/Chillhopdotcom')
+  }
+}
+
 class ExplainSettings extends Command {
   async run({userState, args}: RunArgs) {
     await this.say('hard mode: Any revealed hints must be used in subsequent guesses.')
@@ -110,7 +116,7 @@ class Guess extends Command {
     if(args.length > 1) {
       return await this.say(`${userState.username} Please guess only one word at a time!. Usage: !guess yourword`);
     }
-    const result = await this.game.guess(args[0]);
+    const result = await this.game.guess(args[0], userState.username);
     if(result.type === ALERT_TYPE_GUESS && result.status === ALERT_STATUS_ERROR) {
       return await this.say(`${userState.username} ${result.message}`);
     }
@@ -132,7 +138,6 @@ class Refresh extends Command {
   async run({userState, args}: RunArgs) {
     // TODO enforce not refreshing
     // !refresh prevent if others recently guessed. Allow if only guesser
-    console.log('execute refresh')
     await this.game.refresh()
   }
 }
@@ -171,12 +176,11 @@ class ListCommands extends Command {
 // TODO LIST
 //
 // features:
-// show solution after a period of inactivity and refresh
-// write name next to who guessed/what
-// chat rules
-// !music
-// scoreboard
-// avatars
+// 1. show solution after a period of inactivity and refresh
+// 2. write name next to who guessed/what
+// 3. chat rules
+// 4. scoreboard -- determine how to award points
+// 5. avatars
 
 async function main() {
   const client = new tmi.Client({
@@ -198,6 +202,7 @@ async function main() {
     new HowToPlay({client, game, name: 'howtoplay', isInteractive: false}),
     new WordList({client, game, name: 'wordlist', isInteractive: false}),
     new ExplainSettings({client, game, name: 'explainsettings', isInteractive: false}),
+    new Music({client, game, name: 'music', isInteractive: false}),
     new Settings({client, game, name: 'settings', isInteractive: false}),
     new Refresh({client, game, name: 'refresh', isInteractive: true, alias: 'r'}),
     new Guess({client, game, name: 'guess', isInteractive: true, alias: 'g'}),
@@ -254,6 +259,7 @@ async function main() {
     if(game.gameMode() === GAME_MODE_DAILY) {
       game.toggle(GAME_SETTING_GAME)
     }
+    game.init()
     while(true) {
       await processJobs()
     }
