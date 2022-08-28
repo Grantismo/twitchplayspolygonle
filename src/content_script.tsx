@@ -91,6 +91,12 @@ class Music extends Command {
   }
 }
 
+class Code extends Command {
+  async run({userState, args}: RunArgs) {
+    await this.say('https://github.com/Grantismo/twitchplayspolygonle')
+  }
+}
+
 class ExplainSettings extends Command {
   async run({userState, args}: RunArgs) {
     await this.say('hard mode: Any revealed hints must be used in subsequent guesses.')
@@ -136,9 +142,13 @@ class Guess extends Command {
 
 class Refresh extends Command {
   async run({userState, args}: RunArgs) {
-    // TODO enforce not refreshing
-    // !refresh prevent if others recently guessed. Allow if only guesser
-    await this.game.refresh()
+    const guessers = new Set(this.game.guessers); 
+    const isOnlyGuesser = guessers.size == 1 && guessers.has(userState.username);
+    if(this.game.isInactive() || isOnlyGuesser) {
+      return await this.game.refresh()
+    } else {
+      return await this.say(`${userState.username} can't refresh while others are guessing`);
+    }
   }
 }
 
@@ -176,9 +186,7 @@ class ListCommands extends Command {
 // TODO LIST
 //
 // features:
-// 1. show solution after a period of inactivity and refresh
-// 2. write name next to who guessed/what
-// 3. chat rules
+// 3. tutorial via chat rules
 // 4. scoreboard -- determine how to award points
 // 5. avatars
 
@@ -203,6 +211,7 @@ async function main() {
     new WordList({client, game, name: 'wordlist', isInteractive: false}),
     new ExplainSettings({client, game, name: 'explainsettings', isInteractive: false}),
     new Music({client, game, name: 'music', isInteractive: false}),
+    new Music({client, game, name: 'code', isInteractive: false}),
     new Settings({client, game, name: 'settings', isInteractive: false}),
     new Refresh({client, game, name: 'refresh', isInteractive: true, alias: 'r'}),
     new Guess({client, game, name: 'guess', isInteractive: true, alias: 'g'}),
@@ -248,6 +257,13 @@ async function main() {
   
   const processJobs = async () => {
     if(jobs.length === 0) {
+      if(game.isInactive()) {
+        const solution = game.solution();
+        await game.guess(solution);
+        await client.say(config.TWITCH_CHANNEL, `The solution was ${solution}`)
+        await game.nextPuzzle();
+      }
+
       return await wait(JOB_POLL_DELAY)
     }
     const next = jobs.shift()! //dequeue
@@ -259,6 +275,8 @@ async function main() {
     if(game.gameMode() === GAME_MODE_DAILY) {
       await game.toggle(GAME_SETTING_GAME)
     }
+    await game.init()
+
     while(true) {
       await processJobs()
     }
@@ -266,16 +284,5 @@ async function main() {
 };
 
 if((new URLSearchParams(window.location.search)).has('twitch')) {
-  // main();
-}
-
-console.log('load extension');
-window.onload = async () => {
-  console.log('onload');
-  const g = new Game();
-  await g.guess('sunshine', 'blorppppp')
-  await g.guess('sunshine', 'blorppppp')
-  await g.guess('sunshine', 'blorppppp')
-  await g.guess('sunshine', 'blorppppp')
-  await g.guess('sunshine', 'blorppppp')
+  main();
 }

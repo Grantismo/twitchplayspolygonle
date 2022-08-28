@@ -4,6 +4,8 @@ const WAIT_TIMEOUT = 10000;
 const ALERT_WAIT_TIMEOUT = 350*8 /* max reveal delay */ + 500;
 const ALERT_POLL_DELAY = 25;
 
+const SETTINGS_ALERT_WAIT_TIMEOUT = 200;
+
 export const ALERT_TYPE_GUESS = "guess";
 export const ALERT_TYPE_GAME_END = "game_end";
 export const ALERT_TYPE_SETTING = "setting";
@@ -24,6 +26,8 @@ const HIGH_CONTRAST_KEY = 'highContrast'
 const HARD_MODE_KEY = 'gameMode' // don't modify even though this is confusing
 const EXPERT_MODE_KEY = 'expertMode'
 const THEME_KEY = 'theme'
+const GUESSERS_KEY = 'guessers';
+const GAME_STATE_KEY = 'gameState';
 
 const SETTINGS = new Set([GAME_SETTING_DARK,
                   GAME_SETTING_HARD,
@@ -31,6 +35,8 @@ const SETTINGS = new Set([GAME_SETTING_DARK,
                   GAME_SETTING_HIGH_CONTRAST,
                   GAME_SETTING_GAME]);
 
+
+const INACTIVITY_MILLIS = 1000*60*5; // 5 minutes of inactivity
 
 export const wait = async (millis: number) => {
   return new Promise<void>((resolve, reject) => {
@@ -42,6 +48,11 @@ type AlertData = {
   message: string
   status?: string
   type?: string
+}
+
+type GameState = {
+  gameMode: string
+  solution: string
 }
 
 
@@ -91,9 +102,56 @@ const Guessers = (guessers: string[]) => {
 
 export class Game {
   guessers: string[] = []
+  lastActionTimestamp = 0  
   constructor() {}
 
+  async init() {
+    const guessers = await this.getStoredGuessers();
+    const guessedRows = document.querySelectorAll('[aria-label="guessed row"]');
+    if(guessers && guessers.length === guessedRows.length) {
+      this.setStoredGuessers(guessers);
+    } else {
+      await this.refresh();
+    }
+    this.updateLastActionTimestamp()
+  }
+
+  updateLastActionTimestamp() {
+    this.lastActionTimestamp = Date.now();
+  }
+
+  isInactive() {
+    return (Date.now() - this.lastActionTimestamp) > INACTIVITY_MILLIS;
+  }
+
+  setStoredGuessers(guessers: string[]) {
+    chrome.storage.sync.set({[GUESSERS_KEY]: guessers});
+  }
+
+  async getStoredGuessers() {
+    return (await chrome.storage.sync.get([GUESSERS_KEY]))[GUESSERS_KEY];
+  }
+
+  async setGuessers(guessers: string[]){
+    this.guessers = guessers;
+    this.setStoredGuessers(this.guessers);
+    await this.renderGuessers()
+  }
+
+  async addGuesser(guesser: string) {
+    this.guessers.push(guesser);
+    await this.setGuessers(this.guessers);
+  }
+
+  async removeLastGuesser() {
+    this.guessers.pop();
+    await this.setGuessers(this.guessers);
+  }
+
+
+  // external action
   async guess(word: string, guesser?: string) {
+    this.updateLastActionTimestamp();
     if(word.length < this.wordLength()) {
       return {message: 'Not enough letters', type: ALERT_TYPE_GUESS, status: ALERT_STATUS_ERROR} 
     }
@@ -101,8 +159,7 @@ export class Game {
       return {message: 'Too many letters', type: ALERT_TYPE_GUESS, status: ALERT_STATUS_ERROR} 
     }
     if(guesser) {
-      this.guessers.push(guesser)
-      this.renderGuesses()
+      await this.addGuesser(guesser)
     }
     for(let i = 0; i < word.length; i++){
       await keypress({key: word[i]});
@@ -113,14 +170,14 @@ export class Game {
     if(msg) {
       // either game over OR we got an error based on this guess
       await this.clearGuess()
-      // TODO remove guesser
+      await this.removeLastGuesser()
       return msg
     }
     return {message: 'Valid guess', type: ALERT_TYPE_GUESS, status: ALERT_STATUS_SUCCESS} 
   }
 
-  async renderGuesses() {
-    let guessers = document.getElementById('guessers');
+  async renderGuessers() {
+    let guessers = document.getElementById(GUESSERS_ID);
     if(!guessers) {
       const root = document.getElementById('root');
       if(!root) {
@@ -162,6 +219,7 @@ export class Game {
   }
 
   async refresh() {
+    await this.setGuessers([]);
     return await clickById('nav-btn-refresh');
   }
 
@@ -180,14 +238,17 @@ export class Game {
 
 	async nextPuzzle() {
     let el = await waitIdIsPresent('stats-next-puzzle');
-    return await click(el);
+    await click(el);
+    return await this.setGuessers([]);
 	}
 
 	async closeSettings() {
     return await keypress({key: 'Escape'});
 	}
 
+  // external action
   async currentSettings() {
+    this.updateLastActionTimestamp();
     return {
       hard: (await localStorage.getItem(HARD_MODE_KEY) || '') ===  GAME_SETTING_HARD,
       expert: (await localStorage.getItem(EXPERT_MODE_KEY) || '') ===  GAME_SETTING_EXPERT,
@@ -196,7 +257,14 @@ export class Game {
     }
   }
 
+  solution() {
+    const gameState = JSON.parse(localStorage.getItem(GAME_STATE_KEY) || '') || [] as GameState[];
+    return gameState.find((g: GameState) => g.gameMode === 'Unlimited').solution
+  }
+
+  // external action
   async toggle(mode: string) {
+    this.updateLastActionTimestamp();
     if(!SETTINGS.has(mode)) {
       return false // unknown mode
     }
@@ -213,13 +281,13 @@ export class Game {
     await wait(300);
     await click(el);
     await this.closeSettings(); 
-    return await this.waitForAlert();
+    return await this.waitForAlert(SETTINGS_ALERT_WAIT_TIMEOUT);
   }
 
-  async waitForAlert() {
+  async waitForAlert(timeout=ALERT_WAIT_TIMEOUT) {
     let el;
     let totalWait = 0;
-    while(totalWait < ALERT_WAIT_TIMEOUT) {
+    while(totalWait < timeout) {
       const el = document.querySelector('[role="alert"]') as HTMLElement
       if(el) {
         return {message: el.textContent || '', type: el.dataset.type, status: el.dataset.status} as AlertData
