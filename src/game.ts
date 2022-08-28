@@ -18,8 +18,7 @@ export const GAME_SETTING_EXPERT = "expert";
 export const GAME_SETTING_HIGH_CONTRAST = "highcontrast";
 export const GAME_SETTING_GAME = "game";
 
-const GUESSER_CLASS = 'guesser';
-
+const GUESSERS_ID = 'guessers';
 
 const HIGH_CONTRAST_KEY = 'highContrast'
 const HARD_MODE_KEY = 'gameMode' // don't modify even though this is confusing
@@ -84,48 +83,15 @@ const clickById = async (id: string) => {
     return true;
 }
 
-const decorateWithGuesser = (rowElement: Element, name: string) => {
-  const firstCell = rowElement?.children[0] as HTMLElement;
-  if(!firstCell) {
-    return;
-  }
-  firstCell.style.position = 'relative';
-  const firstChild = firstCell.children[0];
-  const nameDiv = document.createElement('div');
-  nameDiv.classList.add(GUESSER_CLASS);
-  nameDiv.classList.add('text-black')
-  nameDiv.classList.add('dark:text-white')
-  nameDiv.textContent = name;
-  nameDiv.style.position = 'absolute';
-  nameDiv.style.left = '-30rem';
-  nameDiv.style.width = '30rem';
-  nameDiv.style.paddingRight = '1rem';
-  nameDiv.style.textAlign = 'right';
-  nameDiv.style.color 
-  firstCell.insertBefore(nameDiv, firstChild);
-};
+const Guesser = (guesser: string) => `<div class="h-14 mx-0.5 mb-1 flex items-center justify-end text-xl title text-black dark:text-white">${guesser}</div>`;
+
+const Guessers = (guessers: string[]) => {
+  return guessers.map((g: string) => Guesser(g)).join('');
+}
 
 export class Game {
   guessers: string[] = []
   constructor() {}
-
-  async init() {
-
-    const target = document.querySelector('[aria-label="puzzle"]')!.parentNode!
-    const observer = new MutationObserver((mutationList, observer) => {
-      const isOwnMutation = mutationList.length > 0 &&
-        mutationList[0].addedNodes.length > 0 &&
-        (mutationList[0].addedNodes[0] as HTMLElement).classList.contains(GUESSER_CLASS); 
-      if(isOwnMutation) {
-        return
-      }
-      const rows = document.querySelectorAll('[aria-label*="row"]')
-      for(let i = 0; i < this.guessers.length; i++) {
-          decorateWithGuesser(rows[i], this.guessers[i]);
-      }
-    });
-    observer.observe(target, {attributes: true, childList: true, subtree: true})
-  }
 
   async guess(word: string, guesser?: string) {
     if(word.length < this.wordLength()) {
@@ -136,7 +102,7 @@ export class Game {
     }
     if(guesser) {
       this.guessers.push(guesser)
-      //await this.decorateWithGuesser(guesser)
+      this.renderGuesses()
     }
     for(let i = 0; i < word.length; i++){
       await keypress({key: word[i]});
@@ -151,6 +117,33 @@ export class Game {
       return msg
     }
     return {message: 'Valid guess', type: ALERT_TYPE_GUESS, status: ALERT_STATUS_SUCCESS} 
+  }
+
+  async renderGuesses() {
+    let guessers = document.getElementById('guessers');
+    if(!guessers) {
+      const root = document.getElementById('root');
+      if(!root) {
+        throw new Error('no root element');
+      }
+      root.style.position = 'relative';
+      guessers = document.createElement('div');
+      guessers.setAttribute('id', GUESSERS_ID);
+      guessers.style.position = 'absolute';
+      guessers.style.paddingRight = '1rem';
+      guessers.style.width = '200px';
+      root.appendChild(guessers);
+    }
+
+    const firstCell = document.querySelector('.cell');
+    if(!firstCell) {
+        throw new Error('no cell element');
+    }
+    const boundingBox = firstCell.getBoundingClientRect();
+
+    guessers.style.left = (boundingBox.x - 200).toString() + "px";
+    guessers.style.top = boundingBox.y.toString() + "px";
+    guessers.innerHTML = Guessers(this.guessers)
   }
 
   wordLength() {

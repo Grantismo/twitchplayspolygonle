@@ -257,9 +257,8 @@ async function main() {
 
   window.onload = async () => {
     if(game.gameMode() === GAME_MODE_DAILY) {
-      game.toggle(GAME_SETTING_GAME)
+      await game.toggle(GAME_SETTING_GAME)
     }
-    game.init()
     while(true) {
       await processJobs()
     }
@@ -267,5 +266,16 @@ async function main() {
 };
 
 if((new URLSearchParams(window.location.search)).has('twitch')) {
-  main();
+  // main();
+}
+
+console.log('load extension');
+window.onload = async () => {
+  console.log('onload');
+  const g = new Game();
+  await g.guess('sunshine', 'blorppppp')
+  await g.guess('sunshine', 'blorppppp')
+  await g.guess('sunshine', 'blorppppp')
+  await g.guess('sunshine', 'blorppppp')
+  await g.guess('sunshine', 'blorppppp')
 }
